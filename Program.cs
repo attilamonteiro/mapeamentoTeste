@@ -1,21 +1,16 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
-using System.Text.Json.Serialization;
-using System.Linq;
-using System.Threading.Tasks;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ConfiguraÁ„o do banco de dados SQLite
+// Configura√ß√£o do banco de dados SQLite
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Habilita CORS para permitir chamadas da API de outros domÌnios
+// Habilita CORS para permitir chamadas da API de outros dom√≠nios
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll",
@@ -38,7 +33,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseCors("AllowAll"); // Aplica polÌtica CORS
+app.UseCors("AllowAll"); // Aplica pol√≠tica CORS
 app.UseAuthorization();
 app.MapControllers();
 
@@ -61,7 +56,7 @@ public class AppDbContext : DbContext
 }
 
 
-// ======================= CONFIGURA«√O DAS ENTIDADES ============================
+// ======================= CONFIGURA√á√ÉO DAS ENTIDADES ============================
 public class ProdutoConfiguration : IEntityTypeConfiguration<Produto>
 {
     public void Configure(EntityTypeBuilder<Produto> builder)
@@ -72,7 +67,7 @@ public class ProdutoConfiguration : IEntityTypeConfiguration<Produto>
                .IsRequired()
                .HasMaxLength(100);
         builder.Property(p => p.Preco)
-               .HasColumnType("REAL"); // SQLite n„o suporta decimal(18,2)
+               .HasColumnType("REAL"); // SQLite n√£o suporta decimal(18,2)
         builder.HasOne(p => p.Categoria)
                .WithMany(c => c.Produtos)
                .HasForeignKey(p => p.CategoriaId)
@@ -101,13 +96,13 @@ public class Produto
     [BindNever]
     public int Id { get; set; }  // Gerado automaticamente pelo banco de dados
 
-    [Required(ErrorMessage = "O nome do produto È obrigatÛrio.")]
+    [Required(ErrorMessage = "O nome do produto √© obrigat√≥rio.")]
     public string Nome { get; set; }
 
-    [Range(0.01, double.MaxValue, ErrorMessage = "O preÁo deve ser maior que zero.")]
+    [Range(0.01, double.MaxValue, ErrorMessage = "O pre√ßo deve ser maior que zero.")]
     public decimal Preco { get; set; }
 
-    [Required(ErrorMessage = "A categoria È obrigatÛria.")]
+    [Required(ErrorMessage = "A categoria √© obrigat√≥ria.")]
     public int CategoriaId { get; set; }
 
     public Categoria? Categoria { get; set; }
@@ -118,7 +113,7 @@ public class Categoria
     [BindNever]
     public int Id { get; set; }  // Gerado automaticamente pelo banco de dados
 
-    [Required(ErrorMessage = "O nome da categoria È obrigatÛrio.")]
+    [Required(ErrorMessage = "O nome da categoria √© obrigat√≥rio.")]
     public string Nome { get; set; }
 
     public string Descricao { get; set; }
@@ -129,16 +124,16 @@ public class Categoria
 
 // ======================= DTOs ============================
 
-// DTO para requisiÁ„o de Produto (n„o inclui o Id)
+// DTO para requisi√ß√£o de Produto (n√£o inclui o Id)
 public class ProdutoRequest
 {
-    [Required(ErrorMessage = "O nome do produto È obrigatÛrio.")]
+    [Required(ErrorMessage = "O nome do produto √© obrigat√≥rio.")]
     public string Nome { get; set; }
 
-    [Range(0.01, double.MaxValue, ErrorMessage = "O preÁo deve ser maior que zero.")]
+    [Range(0.01, double.MaxValue, ErrorMessage = "O pre√ßo deve ser maior que zero.")]
     public decimal Preco { get; set; }
 
-    [Required(ErrorMessage = "A categoria È obrigatÛria.")]
+    [Required(ErrorMessage = "A categoria √© obrigat√≥ria.")]
     public int CategoriaId { get; set; }
 }
 
@@ -152,10 +147,10 @@ public class ProdutoResponse
     public CategoriaResponse? Categoria { get; set; }
 }
 
-// DTO para requisiÁ„o de Categoria (n„o inclui o Id)
+// DTO para requisi√ß√£o de Categoria (n√£o inclui o Id)
 public class CategoriaRequest
 {
-    [Required(ErrorMessage = "O nome da categoria È obrigatÛrio.")]
+    [Required(ErrorMessage = "O nome da categoria √© obrigat√≥rio.")]
     public string Nome { get; set; }
     public string Descricao { get; set; }
 }
@@ -215,7 +210,7 @@ public class ProdutosController : ControllerBase
             .FirstOrDefaultAsync(p => p.Id == id);
 
         if (produto == null)
-            return NotFound($"Produto com ID {id} n„o encontrado.");
+            return NotFound($"Produto com ID {id} n√£o encontrado.");
 
         var response = new ProdutoResponse
         {
@@ -239,12 +234,12 @@ public class ProdutosController : ControllerBase
     public async Task<IActionResult> Create([FromBody] ProdutoRequest produtoRequest)
     {
         if (produtoRequest == null)
-            return BadRequest("O produto n„o pode ser nulo.");
+            return BadRequest("O produto n√£o pode ser nulo.");
 
         // Verifica se a categoria existe
         var categoria = await _context.Categorias.FindAsync(produtoRequest.CategoriaId);
         if (categoria == null)
-            return BadRequest($"A categoria com ID {produtoRequest.CategoriaId} n„o existe.");
+            return BadRequest($"A categoria com ID {produtoRequest.CategoriaId} n√£o existe.");
 
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
@@ -285,12 +280,12 @@ public class ProdutosController : ControllerBase
 
         var produto = await _context.Produtos.FindAsync(id);
         if (produto == null)
-            return NotFound($"Produto com ID {id} n„o encontrado.");
+            return NotFound($"Produto com ID {id} n√£o encontrado.");
 
         // Verifica se a nova categoria existe
         var categoria = await _context.Categorias.FindAsync(produtoRequest.CategoriaId);
         if (categoria == null)
-            return BadRequest($"A categoria com ID {produtoRequest.CategoriaId} n„o existe.");
+            return BadRequest($"A categoria com ID {produtoRequest.CategoriaId} n√£o existe.");
 
         produto.Nome = produtoRequest.Nome;
         produto.Preco = produtoRequest.Preco;
@@ -308,7 +303,7 @@ public class ProdutosController : ControllerBase
     {
         var produto = await _context.Produtos.FindAsync(id);
         if (produto == null)
-            return NotFound($"Produto com ID {id} n„o encontrado.");
+            return NotFound($"Produto com ID {id} n√£o encontrado.");
 
         _context.Produtos.Remove(produto);
         await _context.SaveChangesAsync();
@@ -350,7 +345,7 @@ public class CategoriasController : ControllerBase
     {
         var categoria = await _context.Categorias.FindAsync(id);
         if (categoria == null)
-            return NotFound($"Categoria com ID {id} n„o encontrada.");
+            return NotFound($"Categoria com ID {id} n√£o encontrada.");
 
         var response = new CategoriaResponse
         {
@@ -367,7 +362,7 @@ public class CategoriasController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CategoriaRequest categoriaRequest)
     {
         if (categoriaRequest == null)
-            return BadRequest("A categoria n„o pode ser nula.");
+            return BadRequest("A categoria n√£o pode ser nula.");
 
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
@@ -400,7 +395,7 @@ public class CategoriasController : ControllerBase
 
         var categoria = await _context.Categorias.FindAsync(id);
         if (categoria == null)
-            return NotFound($"Categoria com ID {id} n„o encontrada.");
+            return NotFound($"Categoria com ID {id} n√£o encontrada.");
 
         categoria.Nome = categoriaRequest.Nome;
         categoria.Descricao = categoriaRequest.Descricao;
@@ -417,7 +412,7 @@ public class CategoriasController : ControllerBase
     {
         var categoria = await _context.Categorias.FindAsync(id);
         if (categoria == null)
-            return NotFound($"Categoria com ID {id} n„o encontrada.");
+            return NotFound($"Categoria com ID {id} n√£o encontrada.");
 
         _context.Categorias.Remove(categoria);
         await _context.SaveChangesAsync();
