@@ -1,12 +1,11 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using System.Text.Json.Serialization;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -38,13 +37,13 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// Configuração de Middleware
 app.UseHttpsRedirection();
 app.UseCors("AllowAll"); // Aplica política CORS
 app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
 
 // ======================= CONTEXTO DO BANCO DE DADOS ============================
 public class AppDbContext : DbContext
@@ -60,6 +59,7 @@ public class AppDbContext : DbContext
         modelBuilder.ApplyConfiguration(new CategoriaConfiguration());
     }
 }
+
 
 // ======================= CONFIGURAÇÃO DAS ENTIDADES ============================
 public class ProdutoConfiguration : IEntityTypeConfiguration<Produto>
@@ -94,25 +94,82 @@ public class CategoriaConfiguration : IEntityTypeConfiguration<Categoria>
     }
 }
 
+
 // ======================= ENTIDADES ============================
 public class Produto
+{
+    [BindNever]
+    public int Id { get; set; }  // Gerado automaticamente pelo banco de dados
+
+    [Required(ErrorMessage = "O nome do produto é obrigatório.")]
+    public string Nome { get; set; }
+
+    [Range(0.01, double.MaxValue, ErrorMessage = "O preço deve ser maior que zero.")]
+    public decimal Preco { get; set; }
+
+    [Required(ErrorMessage = "A categoria é obrigatória.")]
+    public int CategoriaId { get; set; }
+
+    public Categoria? Categoria { get; set; }
+}
+
+public class Categoria
+{
+    [BindNever]
+    public int Id { get; set; }  // Gerado automaticamente pelo banco de dados
+
+    [Required(ErrorMessage = "O nome da categoria é obrigatório.")]
+    public string Nome { get; set; }
+
+    public string Descricao { get; set; }
+
+    public ICollection<Produto> Produtos { get; set; } = new List<Produto>();
+}
+
+
+// ======================= DTOs ============================
+
+// DTO para requisição de Produto (não inclui o Id)
+public class ProdutoRequest
+{
+    [Required(ErrorMessage = "O nome do produto é obrigatório.")]
+    public string Nome { get; set; }
+
+    [Range(0.01, double.MaxValue, ErrorMessage = "O preço deve ser maior que zero.")]
+    public decimal Preco { get; set; }
+
+    [Required(ErrorMessage = "A categoria é obrigatória.")]
+    public int CategoriaId { get; set; }
+}
+
+// DTO para resposta de Produto (inclui o Id)
+public class ProdutoResponse
 {
     public int Id { get; set; }
     public string Nome { get; set; }
     public decimal Preco { get; set; }
     public int CategoriaId { get; set; }
-    public Categoria Categoria { get; set; }
+    public CategoriaResponse? Categoria { get; set; }
 }
 
-public class Categoria
+// DTO para requisição de Categoria (não inclui o Id)
+public class CategoriaRequest
+{
+    [Required(ErrorMessage = "O nome da categoria é obrigatório.")]
+    public string Nome { get; set; }
+    public string Descricao { get; set; }
+}
+
+// DTO para resposta de Categoria (inclui o Id)
+public class CategoriaResponse
 {
     public int Id { get; set; }
     public string Nome { get; set; }
     public string Descricao { get; set; }
-    public ICollection<Produto> Produtos { get; set; } = new List<Produto>();
 }
 
-// ======================= CONTROLLER ============================
+
+// ======================= CONTROLLER DE PRODUTOS ============================
 [ApiController]
 [Route("api/[controller]")]
 public class ProdutosController : ControllerBase
@@ -131,7 +188,22 @@ public class ProdutosController : ControllerBase
         var produtos = await _context.Produtos
             .Include(p => p.Categoria)
             .ToListAsync();
-        return Ok(produtos);
+
+        var response = produtos.Select(p => new ProdutoResponse
+        {
+            Id = p.Id,
+            Nome = p.Nome,
+            Preco = p.Preco,
+            CategoriaId = p.CategoriaId,
+            Categoria = p.Categoria == null ? null : new CategoriaResponse
+            {
+                Id = p.Categoria.Id,
+                Nome = p.Categoria.Nome,
+                Descricao = p.Categoria.Descricao
+            }
+        });
+
+        return Ok(response);
     }
 
     // GET: api/produtos/{id}
@@ -143,58 +215,88 @@ public class ProdutosController : ControllerBase
             .FirstOrDefaultAsync(p => p.Id == id);
 
         if (produto == null)
-        {
             return NotFound($"Produto com ID {id} não encontrado.");
-        }
 
-        return Ok(produto);
+        var response = new ProdutoResponse
+        {
+            Id = produto.Id,
+            Nome = produto.Nome,
+            Preco = produto.Preco,
+            CategoriaId = produto.CategoriaId,
+            Categoria = produto.Categoria == null ? null : new CategoriaResponse
+            {
+                Id = produto.Categoria.Id,
+                Nome = produto.Categoria.Nome,
+                Descricao = produto.Categoria.Descricao
+            }
+        };
+
+        return Ok(response);
     }
 
     // POST: api/produtos
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] Produto produto)
+    public async Task<IActionResult> Create([FromBody] ProdutoRequest produtoRequest)
     {
-        if (produto == null)
-        {
+        if (produtoRequest == null)
             return BadRequest("O produto não pode ser nulo.");
-        }
+
+        // Verifica se a categoria existe
+        var categoria = await _context.Categorias.FindAsync(produtoRequest.CategoriaId);
+        if (categoria == null)
+            return BadRequest($"A categoria com ID {produtoRequest.CategoriaId} não existe.");
 
         if (!ModelState.IsValid)
-        {
             return BadRequest(ModelState);
-        }
+
+        var produto = new Produto
+        {
+            Nome = produtoRequest.Nome,
+            Preco = produtoRequest.Preco,
+            CategoriaId = produtoRequest.CategoriaId
+        };
 
         _context.Produtos.Add(produto);
         await _context.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(GetProdutoById), new { id = produto.Id }, produto);
+        var response = new ProdutoResponse
+        {
+            Id = produto.Id,
+            Nome = produto.Nome,
+            Preco = produto.Preco,
+            CategoriaId = produto.CategoriaId,
+            Categoria = new CategoriaResponse
+            {
+                Id = categoria.Id,
+                Nome = categoria.Nome,
+                Descricao = categoria.Descricao
+            }
+        };
+
+        return CreatedAtAction(nameof(GetProdutoById), new { id = produto.Id }, response);
     }
 
     // PUT: api/produtos/{id}
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(int id, [FromBody] Produto produtoAtualizado)
+    public async Task<IActionResult> Update(int id, [FromBody] ProdutoRequest produtoRequest)
     {
-        if (id != produtoAtualizado.Id)
-        {
-            return BadRequest("O ID do produto não corresponde.");
-        }
-
         if (!ModelState.IsValid)
-        {
             return BadRequest(ModelState);
-        }
 
-        var produtoExistente = await _context.Produtos.FindAsync(id);
-        if (produtoExistente == null)
-        {
+        var produto = await _context.Produtos.FindAsync(id);
+        if (produto == null)
             return NotFound($"Produto com ID {id} não encontrado.");
-        }
 
-        produtoExistente.Nome = produtoAtualizado.Nome;
-        produtoExistente.Preco = produtoAtualizado.Preco;
-        produtoExistente.CategoriaId = produtoAtualizado.CategoriaId;
+        // Verifica se a nova categoria existe
+        var categoria = await _context.Categorias.FindAsync(produtoRequest.CategoriaId);
+        if (categoria == null)
+            return BadRequest($"A categoria com ID {produtoRequest.CategoriaId} não existe.");
 
-        _context.Produtos.Update(produtoExistente);
+        produto.Nome = produtoRequest.Nome;
+        produto.Preco = produtoRequest.Preco;
+        produto.CategoriaId = produtoRequest.CategoriaId;
+
+        _context.Produtos.Update(produto);
         await _context.SaveChangesAsync();
 
         return NoContent();
@@ -206,11 +308,118 @@ public class ProdutosController : ControllerBase
     {
         var produto = await _context.Produtos.FindAsync(id);
         if (produto == null)
-        {
             return NotFound($"Produto com ID {id} não encontrado.");
-        }
 
         _context.Produtos.Remove(produto);
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
+}
+
+
+// ======================= CONTROLLER DE CATEGORIAS ============================
+[ApiController]
+[Route("api/[controller]")]
+public class CategoriasController : ControllerBase
+{
+    private readonly AppDbContext _context;
+
+    public CategoriasController(AppDbContext context)
+    {
+        _context = context;
+    }
+
+    // GET: api/categorias
+    [HttpGet]
+    public async Task<IActionResult> GetCategorias()
+    {
+        var categorias = await _context.Categorias.ToListAsync();
+        var response = categorias.Select(c => new CategoriaResponse
+        {
+            Id = c.Id,
+            Nome = c.Nome,
+            Descricao = c.Descricao
+        });
+        return Ok(response);
+    }
+
+    // GET: api/categorias/{id}
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetCategoriaById(int id)
+    {
+        var categoria = await _context.Categorias.FindAsync(id);
+        if (categoria == null)
+            return NotFound($"Categoria com ID {id} não encontrada.");
+
+        var response = new CategoriaResponse
+        {
+            Id = categoria.Id,
+            Nome = categoria.Nome,
+            Descricao = categoria.Descricao
+        };
+
+        return Ok(response);
+    }
+
+    // POST: api/categorias
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] CategoriaRequest categoriaRequest)
+    {
+        if (categoriaRequest == null)
+            return BadRequest("A categoria não pode ser nula.");
+
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var categoria = new Categoria
+        {
+            Nome = categoriaRequest.Nome,
+            Descricao = categoriaRequest.Descricao
+        };
+
+        _context.Categorias.Add(categoria);
+        await _context.SaveChangesAsync();
+
+        var response = new CategoriaResponse
+        {
+            Id = categoria.Id,
+            Nome = categoria.Nome,
+            Descricao = categoria.Descricao
+        };
+
+        return CreatedAtAction(nameof(GetCategoriaById), new { id = categoria.Id }, response);
+    }
+
+    // PUT: api/categorias/{id}
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(int id, [FromBody] CategoriaRequest categoriaRequest)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var categoria = await _context.Categorias.FindAsync(id);
+        if (categoria == null)
+            return NotFound($"Categoria com ID {id} não encontrada.");
+
+        categoria.Nome = categoriaRequest.Nome;
+        categoria.Descricao = categoriaRequest.Descricao;
+
+        _context.Categorias.Update(categoria);
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    // DELETE: api/categorias/{id}
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var categoria = await _context.Categorias.FindAsync(id);
+        if (categoria == null)
+            return NotFound($"Categoria com ID {id} não encontrada.");
+
+        _context.Categorias.Remove(categoria);
         await _context.SaveChangesAsync();
 
         return NoContent();
