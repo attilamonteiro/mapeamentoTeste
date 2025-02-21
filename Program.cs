@@ -55,8 +55,8 @@ public class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.ApplyConfiguration(new ProdutoConfiguration());
-        modelBuilder.ApplyConfiguration(new CategoriaConfiguration());
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(Produto).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(Categoria).Assembly);
     }
 }
 
